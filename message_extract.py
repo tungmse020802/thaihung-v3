@@ -73,7 +73,7 @@ def extract_message_content(message: Message) -> Dict[str, Any]:
     # URL trần trong text (regex nhẹ — đủ cho junb/thanhtai)
     import re
 
-    for match in re.finditer(r"https?://[^\s<>\"']+", text, re.I):
+    for match in re.finditer(r"(?:https?://|snssdk1180://)[^\s<>\"']+", text, re.I):
         add_url(match.group(0))
 
     return {"text": text, "display_html": display_html, "urls": urls, "attachments": attachments}

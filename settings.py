@@ -49,10 +49,19 @@ DEEPLINK_TIMEOUT_MS = int(os.environ.get("DEEPLINK_TIMEOUT_MS", "25000"))
 
 # Telethon — peer id (web hash -3431776950 → -1003431776950)
 TELEGRAM_CHAT_HASH = os.environ.get("TELEGRAM_CHAT_HASH", "-3431776950").strip()
-# moon_2 (#-3431776950) + nhóm thanhtai (#-4298855488)
+# moon_2, Tung_Lam + 4 nhóm web.telegram.org/k/#-…
 TELEGRAM_CHAT_IDS = os.environ.get(
     "TELEGRAM_CHAT_IDS",
-    "-1003431776950,-1004298855488",
+    ",".join(
+        [
+            "-1003431776950",  # Moon_2  #-3431776950
+            "-1004298855488",  # Tung_Lam #-4298855488
+            "-1003891336100",  # #-3891336100
+            "-1003981109443",  # #-3981109443
+            "-1003792359700",  # #-3792359700
+            "-1003893832981",  # #-3893832981
+        ]
+    ),
 ).strip()
 
 # Session Telethon (trên server thường dùng chung app1 — chỉ 1 process/session)

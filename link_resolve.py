@@ -28,7 +28,7 @@ os.environ.setdefault("DEEPLINK_API_BASE_URL", DEEPLINK_API_BASE_URL)
 logger = logging.getLogger(__name__)
 
 DEEPLINK_PREFIX = "snssdk1180://live?room_id="
-URL_PATTERN = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
+URL_PATTERN = re.compile(r"(?:https?://|snssdk1180://)[^\s<>\"']+", re.IGNORECASE)
 ROOM_ID_PATTERN = re.compile(r"room_id=(\d{15,22})(?:\D|$)")
 BASE62_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 BASE62_OFFSET = 0xE6875
@@ -134,6 +134,10 @@ def _resolve(url: str, deadline: float | None = None) -> tuple[str, str]:
     clean = (url or "").strip()
     if not clean:
         return clean, ""
+
+    already = _ok_deeplink(clean)
+    if already:
+        return already, ""
 
     offline = _decode_thanhtai_countdown(clean)
     if offline:
@@ -245,7 +249,9 @@ def _primary_decode_urls(text: str, extra_urls: List[str] | None) -> List[str]:
         seen.add(url)
         path = (urlparse(url).path or "").lower()
         host = (urlparse(url).netloc or "").lower()
-        if ("junb.io.vn" in host and any(p in path for p in ("/l/", "/s/", "/i/"))) or (
+        if "snssdk1180://" in url.lower() or "room_id=" in url.lower():
+            primaries.append(url)
+        elif ("junb.io.vn" in host and any(p in path for p in ("/l/", "/s/", "/i/"))) or (
             "thanhtai.io" in host and "/r/" in path
         ):
             primaries.append(url)

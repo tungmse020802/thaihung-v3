@@ -7,4 +7,5 @@ __pycache__/
 data/*.session*
 data/*.session-journal
 data/feed_auth.json
+data/debug-tabs/
 .DS_Store

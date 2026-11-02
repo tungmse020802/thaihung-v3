@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.errors.rpcerrorlist import ChannelPrivateError
 from telethon.tl.custom.message import Message
+from telethon.utils import get_peer_id
 
 from link_resolve import bag_remaining_seconds, enrich_message_text
 from message_extract import extract_message_content
@@ -27,6 +28,16 @@ def _load_telegram_creds() -> tuple[int, str, str]:
     api_hash = os.environ["TELEGRAM_API_HASH"].strip()
     phone = os.environ.get("TELEGRAM_PHONE", "").strip()
     return api_id, api_hash, phone
+
+
+def web_hash_from_chat_id(chat_id: int | None) -> str:
+    """-1003891336100 → -3891336100 (hash trên web.telegram.org/k/#)."""
+    if chat_id is None:
+        return ""
+    token = str(chat_id)
+    if token.startswith("-100"):
+        return "-" + token[4:]
+    return token
 
 
 def _parse_chat_ids(raw: str) -> List[int]:
@@ -128,6 +139,8 @@ async def _emit_message(
         "id": msg_id,
         "sender": _sender_name(message),
         "chat": chat_title,
+        "chat_id": int(message.chat_id) if message.chat_id is not None else None,
+        "chat_hash": web_hash_from_chat_id(message.chat_id),
         "outgoing": bool(message.out),
         "timestamp_ms": int(message.date.timestamp() * 1000) if message.date else None,
         "text": text,
@@ -228,19 +241,29 @@ async def run_telethon_feed(
             set_status,
             phase="no_chats",
             username=getattr(me, "username", None),
-            message="Đã login Telethon nhưng acc chưa vào được nhóm #‑3431776950 (moon_2).",
+            message="Đã login Telethon nhưng acc chưa vào được các nhóm trong TELEGRAM_CHAT_IDS.",
         )
         raise RuntimeError(
             "Không nhóm nào trong TELEGRAM_CHAT_IDS truy cập được. "
             "Join nhóm bằng acc Telethon hoặc kiểm tra TELEGRAM_CHAT_IDS."
         )
 
-    titles = [getattr(e, "title", str(e.id)) for e in entities]
+    chats_info = []
+    for e in entities:
+        peer_id = int(get_peer_id(e))
+        chats_info.append(
+            {
+                "id": peer_id,
+                "hash": web_hash_from_chat_id(peer_id),
+                "title": getattr(e, "title", None) or str(peer_id),
+            }
+        )
+    titles = [c["title"] for c in chats_info]
     await _set_status(
         set_status,
         phase="listening",
         username=getattr(me, "username", None),
-        chats=titles,
+        chats=chats_info,
         message=f"Telethon · đang nghe: {', '.join(titles)}",
     )
 

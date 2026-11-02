@@ -50,16 +50,63 @@
     .topbar h1 { margin: 0; font-size: 16px; font-weight: 600; }
     .status { font-size: 12px; color: var(--muted); }
     .status.ok { color: var(--deeplink); }
-    .messages {
+    .tabs {
+      flex-shrink: 0;
+      display: flex;
+      gap: 2px;
+      overflow-x: auto;
+      padding: 0 8px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+    .tab {
+      flex: 0 0 auto;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 10px 12px 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 200px;
+    }
+    .tab span.name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+    .tab .n {
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      background: var(--accent);
+      color: #0e1621;
+      font-size: 11px;
+      line-height: 18px;
+      text-align: center;
+    }
+    .tab .n:empty { display: none; }
+    .panes {
       flex: 1;
       min-height: 0;
+      position: relative;
+    }
+    .messages {
+      display: none;
+      height: 100%;
       overflow-y: auto;
       overscroll-behavior: contain;
       padding: 16px 12px 24px;
-      display: flex;
       flex-direction: column;
       gap: 8px;
     }
+    .messages.active { display: flex; }
     .msg {
       max-width: 92%;
       padding: 8px 12px 6px;
@@ -221,14 +268,19 @@
       </div>
       <button id="logoutBtn" class="logout" type="button">Đăng xuất</button>
     </header>
-    <main id="messages" class="messages">
-      <div class="empty" id="empty">Đang chờ Telethon…</div>
-    </main>
+    <nav id="tabs" class="tabs"></nav>
+    <div id="panes" class="panes">
+      <main id="messages" class="messages active" data-chat="pending">
+        <div class="empty" id="empty">Đang chờ Telethon…</div>
+      </main>
+    </div>
     <button id="toBottom" class="to-bottom" type="button" title="Xuống tin mới nhất">↓<span id="newCount" class="badge"></span></button>
   </div>
   <script>
-    const messagesEl = document.getElementById('messages');
-    const emptyEl = document.getElementById('empty');
+    const panesEl = document.getElementById('panes');
+    const tabsEl = document.getElementById('tabs');
+    let messagesEl = document.getElementById('messages');
+    let emptyEl = document.getElementById('empty');
     const statusEl = document.getElementById('status');
     const loginMask = document.getElementById('loginMask');
     const loginForm = document.getElementById('loginForm');
@@ -236,6 +288,69 @@
     const TOKEN_KEY = 'feed_jwt';
     let wsHandle = null;
     const seen = new Set();
+    const chats = new Map();
+    let activeKey = 'pending';
+
+    function chatKey(item) {
+      if (item && item.chat_id != null) return String(item.chat_id);
+      if (item && item.chat_hash) return String(item.chat_hash);
+      if (item && item.id) return String(item.id);
+      if (item && item.title) return 't:' + item.title;
+      return 'pending';
+    }
+
+    function shortTitle(title, hash) {
+      const t = String(title || '').trim();
+      if (t) return t.length > 22 ? t.slice(0, 20) + '…' : t;
+      return hash || 'nhóm';
+    }
+
+    function ensureChat(meta) {
+      const key = chatKey(meta);
+      let rec = chats.get(key);
+      if (rec) {
+        if (meta.title && rec.title !== meta.title) {
+          rec.title = meta.title;
+          rec.tab.querySelector('.name').textContent = shortTitle(meta.title, meta.hash);
+        }
+        return rec;
+      }
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = 'tab';
+      tab.dataset.chat = key;
+      tab.innerHTML = `<span class="name">${esc(shortTitle(meta.title || meta.chat, meta.hash || meta.chat_hash))}</span><span class="n"></span>`;
+      tab.addEventListener('click', () => activateChat(key));
+      const pane = document.createElement('main');
+      pane.className = 'messages';
+      pane.dataset.chat = key;
+      pane.innerHTML = `<div class="empty">Chưa có tin giải mã</div>`;
+      pane.addEventListener('scroll', updateToBottom, { passive: true });
+      tabsEl.appendChild(tab);
+      panesEl.appendChild(pane);
+      rec = { key, title: meta.title || meta.chat || key, hash: meta.hash || meta.chat_hash || '', tab, pane, unread: 0 };
+      chats.set(key, rec);
+      if (activeKey === 'pending' || chats.size === 1) activateChat(key);
+      return rec;
+    }
+
+    function activateChat(key) {
+      const rec = chats.get(key);
+      if (!rec) return;
+      activeKey = key;
+      chats.forEach((c) => {
+        c.tab.classList.toggle('active', c.key === key);
+        c.pane.classList.toggle('active', c.key === key);
+      });
+      const pending = panesEl.querySelector('[data-chat="pending"]');
+      if (pending) pending.classList.remove('active');
+      messagesEl = rec.pane;
+      rec.unread = 0;
+      rec.tab.querySelector('.n').textContent = '';
+      const titleEl = document.getElementById('title');
+      if (titleEl) titleEl.textContent = rec.title;
+      updateToBottom();
+    }
 
     function getToken() {
       return localStorage.getItem(TOKEN_KEY) || '';
@@ -300,7 +415,6 @@
       return `
         <div class="body">${telegramBody(item)}</div>
         <div class="meta">
-          <span>${esc(item.chat || '')}</span>
           <span>${esc(item.sender || '')}</span>
           <span>${formatTime(item.timestamp_ms)}</span>
         </div>
@@ -335,11 +449,14 @@
 
     function appendItem(item) {
       if (!item || !item.id) return;
-      if (emptyEl) emptyEl.remove();
-      const existing = messagesEl.querySelector(`[data-id="${CSS.escape(item.id)}"]`);
+      const rec = ensureChat(item);
+      const pane = rec.pane;
+      const empty = pane.querySelector('.empty');
+      if (empty) empty.remove();
+      const existing = pane.querySelector(`[data-id="${CSS.escape(item.id)}"]`);
       if (existing) {
         existing.innerHTML = itemHtml(item);
-        updateToBottom();
+        if (rec.key === activeKey) updateToBottom();
         return;
       }
       seen.add(item.id);
@@ -347,9 +464,14 @@
       div.className = 'msg ' + (item.outgoing ? 'out' : 'in');
       div.dataset.id = item.id;
       div.innerHTML = itemHtml(item);
-      messagesEl.appendChild(div);
-      newCount += 1;
-      updateToBottom();
+      pane.appendChild(div);
+      if (rec.key === activeKey) {
+        newCount += 1;
+        updateToBottom();
+      } else {
+        rec.unread += 1;
+        rec.tab.querySelector('.n').textContent = rec.unread > 99 ? '99+' : String(rec.unread);
+      }
     }
 
     function applyTelethonStatus(st) {
@@ -359,11 +481,17 @@
         statusEl.textContent = st.message || 'Telethon · đang nghe nhóm';
         statusEl.classList.add('ok');
         const titleEl = document.getElementById('title');
-        if (titleEl && st.chats && st.chats.length) {
-          titleEl.textContent = st.chats.join(' · ');
+        const list = Array.isArray(st.chats) ? st.chats : [];
+        list.forEach((c) => {
+          if (typeof c === 'string') ensureChat({ title: c, id: c });
+          else ensureChat(c);
+        });
+        if (titleEl && chats.size) {
+          const rec = chats.get(activeKey);
+          titleEl.textContent = rec ? rec.title : (list[0].title || list[0]);
         }
         if (emptyEl && emptyEl.isConnected) {
-          emptyEl.textContent = st.message || 'Chờ tin mới — chỉ giải mã link trong ~2 phút gửi';
+          emptyEl.textContent = st.message || 'Chờ tin mới — mỗi nhóm một tab';
         }
       } else if (phase === 'need_login') {
         statusEl.textContent = 'Chưa login Telethon';
