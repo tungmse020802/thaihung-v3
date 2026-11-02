@@ -1,0 +1,10 @@
+.venv/
+browser-data/
+browser-data-vps/
+__pycache__/
+*.pyc
+.env
+data/*.session*
+data/*.session-journal
+data/feed_auth.json
+.DS_Store

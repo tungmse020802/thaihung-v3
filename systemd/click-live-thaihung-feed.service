@@ -1,0 +1,16 @@
+[Unit]
+Description=Thaihung v3 Telethon feed + WebSocket UI
+After=network-online.target click-live-deeplink-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/click-live/thaihung-v3
+EnvironmentFile=/root/click-live/thaihung-v3/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/root/click-live/thaihung-v3/.venv/bin/python feed_server.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

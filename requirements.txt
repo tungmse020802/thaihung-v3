@@ -1,0 +1,4 @@
+aiohttp==3.10.5
+telethon==1.36.0
+python-dotenv==1.0.1
+playwright==1.46.0
